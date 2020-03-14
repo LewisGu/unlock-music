@@ -2,39 +2,43 @@
 
     <el-container id="app">
         <el-main>
-            <x-upload v-on:handle_finish="showSuccess" v-on:handle_error="showFail"></x-upload>
+            <x-upload v-on:handle_error="showFail" v-on:handle_finish="showSuccess"></x-upload>
 
             <el-row id="app-control">
                 <el-row style="padding-bottom: 1em; font-size: 14px">
                     歌曲命名格式：
-                    <el-radio name="format" v-model="download_format" label="1">歌曲名</el-radio>
-                    <el-radio name="format" v-model="download_format" label="2">歌手-歌曲名</el-radio>
-                    <el-radio name="format" v-model="download_format" label="3">歌曲名-歌手</el-radio>
-                    <el-checkbox v-model="instant_download" border>立即保存</el-checkbox>
+                    <el-radio label="1" name="format" v-model="download_format">歌手-歌曲名</el-radio>
+                    <el-radio label="2" name="format" v-model="download_format">歌曲名</el-radio>
+                    <el-radio label="3" name="format" v-model="download_format">歌曲名-歌手</el-radio>
+                    <el-radio label="4" name="format" v-model="download_format">同原文件名</el-radio>
                 </el-row>
-                <el-button @click="handleDownloadAll" icon="el-icon-download" plain>下载全部</el-button>
-                <el-button @click="handleDeleteAll" icon="el-icon-delete" plain type="danger">删除全部</el-button>
+                <el-row>
+                    <el-button @click="handleDownloadAll" icon="el-icon-download" plain>下载全部</el-button>
+                    <el-button @click="handleDeleteAll" icon="el-icon-delete" plain type="danger">删除全部</el-button>
+                    <el-checkbox border style="margin-left: 1em" v-model="instant_download">立即保存</el-checkbox>
+                </el-row>
             </el-row>
             <audio :autoplay="playing_auto" :src="playing_url" controls/>
 
-            <x-preview :table-data="tableData" :download_format="download_format"
+            <x-preview :download_format="download_format" :table-data="tableData"
                        v-on:music_changed="changePlaying"></x-preview>
 
         </el-main>
         <el-footer id="app-footer">
             <el-row>
-                音乐解锁：移除已购音乐的加密保护。
-                目前支持网易云音乐(ncm)、QQ音乐(qmc, mflac, tkm)以及
-                <a href="https://github.com/ix64/unlock-music/blob/master/README.md" target="_blank">其他格式</a>。
+                <a href="https://github.com/ix64/unlock-music" target="_blank">音乐解锁</a>(v<span
+                    v-text="version"></span>)：移除已购音乐的加密保护。
                 <a href="https://github.com/ix64/unlock-music/wiki/使用提示" target="_blank">使用提示</a>
             </el-row>
             <el-row>
-                <span>Copyright &copy; 2019</span>
-                <a href="https://github.com/ix64" target="_blank">MengYX</a>
+                目前支持网易云音乐(ncm)、QQ音乐(qmc, mflac, mgg, tkm)以及
+                <a href="https://github.com/ix64/unlock-music/blob/master/README.md" target="_blank">其他格式</a>。
+            </el-row>
+            <el-row>
+                <span>Copyright &copy; 2019</span> MengYX
                 音乐解锁使用
                 <a href="https://github.com/ix64/unlock-music/blob/master/LICENSE" target="_blank">MIT许可协议</a>
-                开放
-                <a href="https://github.com/ix64/unlock-music" target="_blank">源代码</a>
+                开放源代码
             </el-row>
         </el-footer>
     </el-container>
@@ -46,6 +50,7 @@
     import upload from "./component/upload"
     import preview from "./component/preview"
     import {DownloadBlobMusic, RemoveBlobMusic} from "./component/util"
+    import config from "../package"
 
     export default {
         name: 'app',
@@ -55,11 +60,12 @@
         },
         data() {
             return {
+                version: config.version,
                 activeIndex: '1',
                 tableData: [],
                 playing_url: "",
                 playing_auto: false,
-                download_format: '2',
+                download_format: '1',
                 instant_download: false,
             }
         },
@@ -69,18 +75,39 @@
             });
         },
         methods: {
-            finishLoad() {
+            async finishLoad() {
                 const mask = document.getElementById("loader-mask");
                 if (!!mask) mask.remove();
-                this.$notify.info({
-                    title: '离线使用',
-                    message: '我们使用PWA技术，无网络也能使用<br/>' +
-                        '最近更新：提供实验性mgg支持<br/>' +
-                        '点击查看 <a target="_blank" href="https://github.com/ix64/unlock-music/wiki/使用提示">使用提示</a>',
-                    dangerouslyUseHTMLString: true,
-                    duration: 10000,
-                    position: 'top-left'
-                });
+                let updateInfo;
+                try {
+                    const resp = await fetch("https://stats.ixarea.com/collect/music/app-version", {
+                        method: "POST", headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({Version: this.version})
+                    });
+                    updateInfo = await resp.json();
+                } catch (e) {
+                }
+                if (!!updateInfo && !!updateInfo.Found) {
+                    this.$notify.warning({
+                        title: '发现更新',
+                        message: '发现新版本 v' + updateInfo.Version +
+                            '<br/>更新详情：' + updateInfo.Detail +
+                            '<br/><a target="_blank" href="' + updateInfo.URL + '">获取更新</a>',
+                        dangerouslyUseHTMLString: true,
+                        duration: 15000,
+                        position: 'top-left'
+                    });
+                } else {
+                    this.$notify.info({
+                        title: '离线使用',
+                        message: '我们使用PWA技术，无网络也能使用' +
+                            '<br/>最近更新：' + config.updateInfo +
+                            '<br/><a target="_blank" href="https://github.com/ix64/unlock-music/wiki/使用提示">使用提示</a>',
+                        dangerouslyUseHTMLString: true,
+                        duration: 10000,
+                        position: 'top-left'
+                    });
+                }
             },
             showSuccess(data) {
                 if (data.status) {
@@ -113,8 +140,8 @@
                 });
                 if (process.env.NODE_ENV === 'production') {
                     window._paq.push(["trackEvent", "Error", errInfo, filename]);
-                    console.error(errInfo, filename);
                 }
+                console.error(errInfo, filename);
             },
             changePlaying(url) {
                 this.playing_url = url;
